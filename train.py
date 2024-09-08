@@ -110,8 +110,8 @@ def main():
     
     # Carregar e preparar os dados
     logger.info("Loading and preparing data")
-    data = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
-    df = data.sample(frac=0.1)
+    df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+    # df = data.sample(frac=0.1)
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     
     X = df.drop('Churn', axis=1)
