@@ -1,10 +1,34 @@
+# perceptron_multilayer.py
 import numpy as np
+import logging
+from typing import Optional
+
+def configure_logging():
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    return logger
 
 class PerceptronMultilayer:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.1):
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 output_size,
+                 learning_rate=0.1,
+                 logger=None):
         """
         Inicializa os pesos e bias do Perceptron Multicamadas.
         """
+        self.logger = logger or configure_logging()
+        self.logger.info(f"Initializing PerceptronMultilayer with input_size={input_size}, \
+                         hidden_size={hidden_size}, \
+                         output_size={output_size}, \
+                         learning_rate={learning_rate}")
+        
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -15,6 +39,7 @@ class PerceptronMultilayer:
         self.weights_hidden_output = np.random.randn(self.output_size, self.hidden_size) * np.sqrt(1. / self.hidden_size)
         self.bias_hidden = np.random.randn(self.hidden_size) * np.sqrt(1. / self.input_size)
         self.bias_output = np.random.randn(self.output_size) * np.sqrt(1. / self.hidden_size)
+        self.logger.info("Weights and biases initialized")
     
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
@@ -32,6 +57,7 @@ class PerceptronMultilayer:
         """
         Treina o modelo usando propagação para frente e retropropagação.
         """
+        self.logger.info(f"Starting training for {epochs} epochs")
         for epoch in range(epochs):
             total_loss = 0
             for inputs, expected_output in zip(X, y):
@@ -49,6 +75,7 @@ class PerceptronMultilayer:
             # Exibir a perda a cada 100 épocas
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}, Average Loss: {total_loss / len(X)}")
+        self.logger.info("Training completed")
 
     def feedfoward(self, inputs):
         v_hidden = np.dot(self.weights_input_hidden, inputs) + self.bias_hidden
@@ -71,6 +98,7 @@ class PerceptronMultilayer:
         """
         Faz previsões probabilísticas para novas entradas
         """
+        self.logger.info(f"Making probabilistic predictions for {len(X)} samples")
         probabilities = []
         for inputs in X:
             _, y_output = self.feedfoward(inputs)
@@ -81,6 +109,7 @@ class PerceptronMultilayer:
         """
         Faz previsões binárias para novas entradas.
         """
+        self.logger.info(f"Making binary predictions for {len(X)} samples")
         probabilities = self.predict_proba(X)
         return (probabilities >= 0.5).astype(int)
     
@@ -88,6 +117,8 @@ class PerceptronMultilayer:
         """
         Avalia o modelo calculando a acurácia.
         """
+        self.logger.info("Evaluating model performance")
         predictions = self.predict(X)
         accuracy = np.mean(predictions == y)
+        self.logger.info(f"Model accuracy: {accuracy:.4f}")
         return accuracy
