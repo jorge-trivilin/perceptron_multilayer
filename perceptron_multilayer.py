@@ -22,6 +22,12 @@ class PerceptronMultilayer:
     def sigmoid_derivative(self, x):
         return x * (1 - x)
     
+    def binary_cross_entropy(self, expected_output, y_output):
+        epsilon = 1e-8  # Para evitar log(0)
+        y_output = np.clip(y_output, epsilon, 1 - epsilon)
+        bce = - expected_output * np.log(y_output) + (1 - expected_output) * np.log(1 - y_output)
+        return bce
+    
     def fit(self, X, y, epochs=1000):
         """
         Treina o modelo usando propagação para frente e retropropagação.
@@ -34,7 +40,7 @@ class PerceptronMultilayer:
 
                 # Cálculo do erro e da perda
                 error = expected_output - y_output
-                sample_loss = np.mean(error ** 2) # MSE para uma amostra
+                sample_loss = self.binary_cross_entropy(expected_output, y_output)
                 total_loss += sample_loss
                 
                 # Backpropagation
