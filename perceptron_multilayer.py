@@ -30,30 +30,40 @@ class PerceptronMultilayer:
             total_loss = 0
             for inputs, expected_output in zip(X, y):
                 # Propagação para frente
-                v_hidden = np.dot(self.weights_input_hidden, inputs) + self.bias_hidden
-                y_hidden = self.sigmoid(v_hidden)
-                v_output = np.dot(self.weights_hidden_output, y_hidden) + self.bias_output
-                y_output = self.sigmoid(v_output)
-                
-                # Retropropagação
+                y_hidden, y_output = self.feedfoward(inputs)
+
+                # Cálculo do erro e da perda
                 error = expected_output - y_output
-                total_loss += np.mean((expected_output - y_output) ** 2)
-                delta_output = error * self.sigmoid_derivative(y_output)
-                delta_hidden = np.dot(self.weights_hidden_output.T, delta_output) * self.sigmoid_derivative(y_hidden)
+                sample_loss = np.mean(error ** 2) # MSE para uma amostra
+                total_loss += sample_loss
                 
-                # Atualização dos pesos e bias
-                self.weights_hidden_output += self.learning_rate * np.outer(delta_output, y_hidden)
-                self.weights_input_hidden += self.learning_rate * np.outer(delta_hidden, inputs)
-                self.bias_hidden += self.learning_rate * delta_hidden
-                self.bias_output += self.learning_rate * delta_output
+                # Backpropagation
+                self.backpropagation(error, inputs, y_hidden, y_output)
             
             # Exibir a perda a cada 100 épocas
             if epoch % 100 == 0:
-                print(f"Epoch {epoch}, Loss: {total_loss}")
+                print(f"Epoch {epoch}, Average Loss: {total_loss / len(X)}")
+
+    def feedfoward(self, inputs):
+        v_hidden = np.dot(self.weights_input_hidden, inputs) + self.bias_hidden
+        y_hidden = self.sigmoid(v_hidden)
+        v_output = np.dot(self.weights_hidden_output, y_hidden) + self.bias_output
+        y_output = self.sigmoid(v_output)
+        return y_hidden, y_output
+
+    def backpropagation(self, error, inputs, y_hidden, y_output):
+        delta_output = error * self.sigmoid_derivative(y_output)
+        delta_hidden = np.dot(self.weights_hidden_output.T, delta_output) * self.sigmoid_derivative(y_hidden)
+
+        # Atualização dos pesos e bias
+        self.weights_hidden_output += self.learning_rate * np.outer(delta_output, y_hidden)
+        self.weights_input_hidden += self.learning_rate * np.outer(delta_hidden, inputs)
+        self.bias_hidden += self.learning_rate * delta_hidden
+        self.bias_output += self.learning_rate * delta_output
 
     def predict_proba(self, X):
         """
-        Faz previsões probabilisticas para novas entradas
+        Faz previsões probabilísticas para novas entradas
         """
         probabilities = []
         for inputs in X:
