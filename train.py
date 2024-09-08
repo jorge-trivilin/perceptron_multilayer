@@ -86,7 +86,8 @@ def cross_validate_perceptron(X_train, y_train, n_splits=5):
     return mean_train_log_loss, mean_val_log_loss, mean_val_accuracy
 
 # Carregar e preparar os dados
-df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+data = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+df = data.sample(frac=0.1)
 
 # Converter TotalCharges para numérico
 df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
