@@ -1,7 +1,6 @@
 # perceptron_multilayer.py
 import numpy as np
 import logging
-from typing import Optional
 
 def configure_logging():
     logger = logging.getLogger(__name__)
