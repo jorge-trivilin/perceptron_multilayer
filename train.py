@@ -2,13 +2,13 @@
 import pandas as pd
 import numpy as np
 from perceptron_multilayer import PerceptronMultilayer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import log_loss, accuracy_score
-from joblib import Parallel, delayed
+from sklearn.preprocessing import StandardScaler, OneHotEncoder  # type: ignore
+from sklearn.compose import ColumnTransformer # type: ignore
+from sklearn.pipeline import Pipeline # type: ignore
+from sklearn.impute import SimpleImputer # type: ignore
+from sklearn.model_selection import train_test_split, KFold # type: ignore
+from sklearn.metrics import log_loss, accuracy_score # type: ignore
+from joblib import Parallel, delayed # type: ignore
 import logging
 
 def configure_logging():

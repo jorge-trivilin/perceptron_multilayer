@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import log_loss, accuracy_score
-from joblib import Parallel, delayed
+from sklearn.preprocessing import StandardScaler, OneHotEncoder # type: ignore 
+from sklearn.compose import ColumnTransformer # type: ignore
+from sklearn.pipeline import Pipeline # type: ignore
+from sklearn.impute import SimpleImputer # type: ignore
+from sklearn.model_selection import train_test_split, KFold # type: ignore
+from sklearn.neural_network import MLPClassifier # type: ignore
+from sklearn.metrics import log_loss, accuracy_score # type: ignore
+from joblib import Parallel, delayed # type: ignore
 
 # Função para criar o pré-processador
 def create_preprocessor():

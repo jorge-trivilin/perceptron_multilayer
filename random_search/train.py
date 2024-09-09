@@ -1,17 +1,17 @@
 # train.py
 import pandas as pd
 import numpy as np
-from perceptron_multilayer_random_search import PerceptronMultilayer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import log_loss, accuracy_score
-from joblib import Parallel, delayed
+from perceptron_multilayer_random_search import PerceptronMultilayer # type: ignore
+from sklearn.preprocessing import StandardScaler, OneHotEncoder # type: ignore
+from sklearn.compose import ColumnTransformer # type: ignore
+from sklearn.pipeline import Pipeline # type: ignore
+from sklearn.impute import SimpleImputer # type: ignore
+from sklearn.model_selection import train_test_split, KFold # type: ignore
+from sklearn.metrics import log_loss, accuracy_score # type: ignore
+from joblib import Parallel, delayed # type: ignore
 import logging
 import argparse
-from scipy.stats import uniform, randint
+from scipy.stats import uniform, randint # type: ignore
 import random
 
 # Definir semente global

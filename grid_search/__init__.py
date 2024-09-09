@@ -1,1 +1,1 @@
-from .perceptron_multilayer import PerceptronMultilayer
+from .perceptron_multilayer_grid_search import PerceptronMultilayer

@@ -2,11 +2,11 @@
 import pandas as pd
 import numpy as np
 from perceptron_multilayer import PerceptronMultilayer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler, OneHotEncoder # type: ignore 
+from sklearn.compose import ColumnTransformer # type: ignore
+from sklearn.pipeline import Pipeline # type: ignore
+from sklearn.impute import SimpleImputer # type: ignore
+from sklearn.model_selection import train_test_split, KFold # type: ignore
 
 
 df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
