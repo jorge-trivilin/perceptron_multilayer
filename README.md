@@ -100,7 +100,7 @@ perceptron_multilayer/
 ├── train.py                      # Main script for training and running random search for hyperparameter tuning
 ├── requirements.txt              # Python package dependencies
 └── README.md                     # Comprehensive project README file
-
+```
 
 ## Hyperparameter Optimization
 Hyperparameters are optimized using **Random Search** over the following parameter space:
