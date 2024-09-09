@@ -20,7 +20,8 @@ class PerceptronMultilayer:
                  hidden_size,
                  output_size,
                  learning_rate=0.1,
-                 logger=None):
+                 logger=None,
+                 random_seed=None):
         """
         Inicializa os pesos e bias do Perceptron Multicamadas.
         """
@@ -28,19 +29,31 @@ class PerceptronMultilayer:
         self.logger.info(f"Initializing PerceptronMultilayer with input_size={input_size}, \
                          hidden_size={hidden_size}, \
                          output_size={output_size}, \
-                         learning_rate={learning_rate}")
+                         learning_rate={learning_rate}, \
+                        random_seed={random_seed}")
         
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
+
+        # Setup the random generator
+        self.rng = np.random.default_rng(random_seed)
         
         # Inicialização dos pesos usando Xavier/Glorot
-        self.weights_input_hidden = np.random.randn(self.hidden_size, self.input_size) * np.sqrt(1. / self.input_size)
-        self.weights_hidden_output = np.random.randn(self.output_size, self.hidden_size) * np.sqrt(1. / self.hidden_size)
-        self.bias_hidden = np.random.randn(self.hidden_size) * np.sqrt(1. / self.input_size)
-        self.bias_output = np.random.randn(self.output_size) * np.sqrt(1. / self.hidden_size)
+        self.weights_input_hidden = self.rng.normal(0, np.sqrt(1. / self.input_size),
+                                                    (self.hidden_size, self.input_size))
+        self.weights_hidden_output = self.rng.normal(0, np.sqrt(1. / self.hidden_size), 
+                                                 (self.output_size, self.hidden_size))
+        self.bias_hidden = self.rng.normal(0, np.sqrt(1. / self.input_size), 
+                                        (self.hidden_size,))
+        self.bias_output = self.rng.normal(0, np.sqrt(1. / self.hidden_size), 
+                                        (self.output_size,))
         self.logger.info("Weights and biases initialized")
+        # self.weights_input_hidden = np.random.randn(self.hidden_size, self.input_size) * np.sqrt(1. / self.input_size)
+        # self.weights_hidden_output = np.random.randn(self.output_size, self.hidden_size) * np.sqrt(1. / self.hidden_size)
+        # self.bias_hidden = np.random.randn(self.hidden_size) * np.sqrt(1. / self.input_size)
+        # self.bias_output = np.random.randn(self.output_size) * np.sqrt(1. / self.hidden_size)
     
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))

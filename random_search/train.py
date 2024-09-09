@@ -16,8 +16,6 @@ import random
 
 # Definir semente global
 RANDOM_SEED = 42
-np.random.seed(RANDOM_SEED)
-random.seed(RANDOM_SEED)
 
 def configure_logging():
     logging.basicConfig(level=logging.INFO,
@@ -62,7 +60,8 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features,
             hidden_size=params['hidden_size'],
             output_size=1,
             learning_rate=params['learning_rate'],
-            logger=logger
+            logger=logger,
+            random_seed=RANDOM_SEED
         )
         
         # Treina o modelo
@@ -83,7 +82,7 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features,
 
 def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5):
     logger.info(f"Starting random search with {n_iter} iterations and {n_splits}-fold cross-validation")
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     def evaluate_params(params):
         scores = []
@@ -130,12 +129,12 @@ def main(data_fraction):
     # Sample the data if fraction is less than 1
     if data_fraction < 1.0:
         logger.info(f"Sampling {data_fraction*100}% of the data")
-        X = X.sample(frac=data_fraction, random_state=42)
+        X = X.sample(frac=data_fraction, random_state=RANDOM_SEED)
         y = y[X.index]
     else:
         logger.info("Using 100% of the data")
     
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_SEED)
     logger.info(f"Data split: Training set size: {len(X_train)}, Test set size: {len(X_test)}")
     
     param_distributions = {
@@ -169,7 +168,8 @@ def main(data_fraction):
         hidden_size=best_params['hidden_size'],
         output_size=1,
         learning_rate=best_params['learning_rate'],
-        logger=logger
+        logger=logger,
+        random_seed=RANDOM_SEED
     )
     final_model.fit(X_train_processed, y_train, epochs=best_params['epochs'], batch_size=best_params['batch_size'])
     
@@ -187,7 +187,7 @@ def main(data_fraction):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Perceptron with specified data fraction")
-    parser.add_argument("--fraction", type=float, default=0.1, help="Fraction of data to use (0.0 to 1.0)")
+    parser.add_argument("--fraction", type=float, default=51.0, help="Fraction of data to use (0.0 to 1.0)")
     args = parser.parse_args()
 
     numeric_features = ['tenure', 'MonthlyCharges', 'TotalCharges']
