@@ -13,7 +13,7 @@ import logging
 import argparse
 from scipy.stats import uniform, randint  # type: ignore
 
-# Definir semente global
+# Define global seed
 RANDOM_SEED = 42
 
 
@@ -22,7 +22,7 @@ def configure_logging():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-    )  # 'force=True' garante que a configuração seja reaplicada.
+    )  # 'force=True' ensures the configuration is reapplied.
     logger = logging.getLogger(__name__)
     return logger
 
@@ -62,14 +62,14 @@ def train_and_evaluate(
     logger,
 ):
     try:
-        # Cria um novo preprocessor para cada fold
+        # Create a new preprocessor for each fold
         preprocessor = create_preprocessor(
             numeric_features, categorical_features, logger
         )
         X_train_processed = preprocessor.fit_transform(X_train)
         X_val_processed = preprocessor.transform(X_val)
 
-        # Converta y para Numpy array, se não for
+        # Convert y to Numpy array if it's not already
         y_train = y_train.to_numpy() if isinstance(y_train, pd.Series) else y_train
         y_val = y_val.to_numpy() if isinstance(y_val, pd.Series) else y_val
 
@@ -83,7 +83,7 @@ def train_and_evaluate(
             random_seed=RANDOM_SEED,
         )
 
-        # Treina o modelo
+        # Train the model
         perceptron.fit(
             X_train_processed,
             y_train,
@@ -91,12 +91,12 @@ def train_and_evaluate(
             batch_size=params["batch_size"],
         )
 
-        # Calculate metrics for training set
+        # Calculate metrics for the training set
         y_train_pred = perceptron.predict_proba(X_train_processed)
         train_log_loss = log_loss(y_train, y_train_pred)
         train_accuracy = perceptron.evaluate(X_train_processed, y_train)
 
-        # Calculate metrics for validation set
+        # Calculate metrics for the validation set
         y_val_pred = perceptron.predict_proba(X_val_processed)
         val_log_loss = log_loss(y_val, y_val_pred)
         val_accuracy = perceptron.evaluate(X_val_processed, y_val)
@@ -108,24 +108,15 @@ def train_and_evaluate(
             f"Validation Log Loss: {val_log_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}"
         )
 
-        # Função evaluate para calcular acurácia diretamente
-        # val_accuracy = perceptron.evaluate(X_val_processed, y_val)
-        # Função predict_proba para calcular o log logss
-        # y_val_pred = perceptron.predict_proba(X_val_processed)
-        # val_log_loss = log_loss(y_val, y_val_pred)
-        # val_accuracy = accuracy_score(y_val, (y_val_pred >= 0.5).astype(int))
-
     except Exception as e:
         logger.error(f"Error during training and evaluation: {e}")
-        # Retorne uma perda muito alta e acurácia baixa para penalizar o erro
+        # Return a very high loss and low accuracy to penalize the error
         train_log_loss, train_accuracy, val_log_loss, val_accuracy = (
             float("inf"),
             0.0,
             float("inf"),
             0.0,
         )
-        # val_log_loss = float('inf')
-        # val_accuracy = 0.0
 
     return train_log_loss, train_accuracy, val_log_loss, val_accuracy
 
@@ -273,7 +264,7 @@ def main(data_fraction):
         X_train, y_train, param_distributions, n_iter=5
     )
 
-    # Verificar se best_params é válido
+    # Check if best_params is valid
     if best_params is None:
         logger.error("Random search did not return valid best parameters. Exiting.")
         exit(1)
@@ -338,7 +329,6 @@ def main(data_fraction):
     logger.info("Evaluating final model on test set")
     y_test_pred = final_model.predict_proba(X_test_processed)
     test_log_loss = log_loss(y_test, y_test_pred)
-    # test_accuracy = accuracy_score(y_test, (y_test_pred >= 0.5).astype(int))
     test_accuracy = final_model.evaluate(X_test_processed, y_test)
 
     logger.info(f"Final results for {data_fraction*100}% of the data:")
