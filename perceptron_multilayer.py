@@ -1,3 +1,4 @@
+# perceptron_multilayer.py
 import numpy as np
 import logging
 from typing import Optional
@@ -51,7 +52,7 @@ class PerceptronMultilayer:
         epsilon = 1e-8  # Para evitar log(0)
         y_output = np.clip(y_output, epsilon, 1 - epsilon)
         bce = - expected_output * np.log(y_output) + (1 - expected_output) * np.log(1 - y_output)
-        return bce
+        return np.mean(bce)
     
     def fit(self, X, y, epochs=1000, batch_size=32):
         """

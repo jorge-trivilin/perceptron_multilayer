@@ -1,3 +1,4 @@
+# train.py
 import pandas as pd
 import numpy as np
 from perceptron_multilayer import PerceptronMultilayer
@@ -10,6 +11,13 @@ from sklearn.metrics import log_loss, accuracy_score
 from joblib import Parallel, delayed
 import logging
 import argparse
+from scipy.stats import uniform, randint
+import random
+
+# Definir semente global
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
+random.seed(RANDOM_SEED)
 
 def configure_logging():
     logging.basicConfig(level=logging.INFO,
@@ -73,8 +81,8 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features,
     
     return val_log_loss, val_accuracy
 
-def grid_search_cv(X, y, param_grid, numeric_features, categorical_features, n_splits=5):
-    logger.info(f"Starting grid search with {n_splits}-fold cross-validation")
+def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5):
+    logger.info(f"Starting random search with {n_iter} iterations and {n_splits}-fold cross-validation")
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     
     def evaluate_params(params):
@@ -83,29 +91,29 @@ def grid_search_cv(X, y, param_grid, numeric_features, categorical_features, n_s
             X_train_fold, X_val_fold = X.iloc[train_index], X.iloc[val_index]
             y_train_fold, y_val_fold = y.iloc[train_index], y.iloc[val_index]
             
-            # Chama a função de treinamento e avaliação
             val_log_loss, val_accuracy = train_and_evaluate(
                 X_train_fold, y_train_fold, X_val_fold, y_val_fold, params, numeric_features, categorical_features
             )
             
-            # Adiciona os resultados à lista de scores
             scores.append((val_log_loss, val_accuracy))
         
-        # Calcula a média dos resultados
         mean_log_loss = np.mean([s[0] for s in scores])
         mean_accuracy = np.mean([s[1] for s in scores])
         return params, mean_log_loss, mean_accuracy
     
-    # Executa o grid search de forma paralela e filtra os resultados não válidos
-    results = [r for r in Parallel(n_jobs=-1)(delayed(evaluate_params)(params) for params in param_grid) if r is not None]
+    random_params = []
+    for _ in range(n_iter):
+        params = {k: v.rvs() for k, v in param_distributions.items()}
+        random_params.append(params)
+    
+    results = [r for r in Parallel(n_jobs=-1)(delayed(evaluate_params)(params) for params in random_params) if r is not None]
     
     if results:
-        # Acessa os melhores parâmetros
         best_params = min(results, key=lambda x: x[1])[0]
-        logger.info(f"Grid search completed. Best parameters: {best_params}")
+        logger.info(f"Random search completed. Best parameters: {best_params}")
         return best_params, results
     else:
-        logger.error("No valid results were found during grid search.")
+        logger.error("No valid results were found during random search.")
         return None, []
 
 def main(data_fraction):
@@ -130,32 +138,25 @@ def main(data_fraction):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     logger.info(f"Data split: Training set size: {len(X_train)}, Test set size: {len(X_test)}")
     
-    # Defining parameter grid with 3 (hidden_size) * 3 (learning_rate) * 2 (epochs) * 2 (batch_size) = 36 iterations.
-    param_grid = [
-        {
-            'hidden_size': hidden_size,
-            'learning_rate': lr,
-            'epochs': epochs,
-            'batch_size': batch_size
-        }
-        for hidden_size in [4, 8, 16]
-        for lr in [0.001, 0.01, 0.1]
-        for epochs in [500, 1000]
-        for batch_size in [32, 64]
-    ] # 36 iterations * 5 folds = 180 training and evaluation during grid search process.
-    
-    # Grid search
-    best_params, all_results = grid_search_cv(X_train, y_train, param_grid, numeric_features, categorical_features)
+    param_distributions = {
+        'hidden_size': randint(4, 32),
+        'learning_rate': uniform(0.001, 0.099),  # This will sample between 0.001 and 0.1
+        'epochs': randint(500, 1001),
+        'batch_size': randint(32, 65)
+    }
+        
+    # random search
+    best_params, all_results = random_search_cv(X_train, y_train, param_distributions, n_iter=3)
 
     # Verificar se best_params é válido
     if best_params is None:
-        logger.error("Grid search did not return valid best parameters. Exiting.")
-        exit(1)  # Ou levante uma exceção, dependendo da sua estratégia de erro
+        logger.error("Random search did not return valid best parameters. Exiting.")
+        exit(1)
     
-    logger.info("Grid search results:")
-    for params, log_loss, accuracy in sorted(all_results, key=lambda x: x[1])[:5]:
+    logger.info("Random search results:")
+    for params, log_loss_value, accuracy in sorted(all_results, key=lambda x: x[1])[:5]:
         logger.info(f"Params: {params}")
-        logger.info(f"Log Loss: {log_loss:.4f}, Accuracy: {accuracy:.4f}\n")
+        logger.info(f"Log Loss: {log_loss_value:.4f}, Accuracy: {accuracy:.4f}\n")
     
     # Train final model with best parameters
     logger.info("Training final model with best parameters")
@@ -186,7 +187,7 @@ def main(data_fraction):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Perceptron with specified data fraction")
-    parser.add_argument("--fraction", type=float, default=1.0, help="Fraction of data to use (0.0 to 1.0)")
+    parser.add_argument("--fraction", type=float, default=0.1, help="Fraction of data to use (0.0 to 1.0)")
     args = parser.parse_args()
 
     numeric_features = ['tenure', 'MonthlyCharges', 'TotalCharges']
