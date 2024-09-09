@@ -1,1 +1,1 @@
-from .perceptron_multilayer import PerceptronMultilayer
+from .perceptron_multilayer_random_search import PerceptronMultilayer

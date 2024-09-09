@@ -1,17 +1,18 @@
 # train.py
 import pandas as pd
 import numpy as np
-from perceptron_multilayer_random_search import PerceptronMultilayer # type: ignore
+from pytorch.perceptron_multilayer_gpu import PerceptronMultilayer # type: ignore
 from sklearn.preprocessing import StandardScaler, OneHotEncoder # type: ignore
 from sklearn.compose import ColumnTransformer # type: ignore
 from sklearn.pipeline import Pipeline # type: ignore
 from sklearn.impute import SimpleImputer # type: ignore
 from sklearn.model_selection import train_test_split, KFold # type: ignore
-from sklearn.metrics import log_loss # type: ignore
+from sklearn.metrics import log_loss, accuracy_score # type: ignore
 from joblib import Parallel, delayed # type: ignore
 import logging
 import argparse
 from scipy.stats import uniform, randint # type: ignore
+import random
 
 # Definir semente global
 RANDOM_SEED = 42
@@ -19,12 +20,12 @@ RANDOM_SEED = 42
 def configure_logging():
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S")  # 'force=True' garante que a configuração seja reaplicada.
-    logger = logging.getLogger(__name__)
-    return logger
+                        datefmt="%Y-%m-%d %H:%M:%S")
+    return logging.getLogger(__name__)
 
+logger = configure_logging()
 
-def create_preprocessor(numeric_features, categorical_features, logger):
+def create_preprocessor(numeric_features, categorical_features):
     logger.info("Creating preprocessor")
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='median')),
@@ -42,10 +43,10 @@ def create_preprocessor(numeric_features, categorical_features, logger):
             ('cat', categorical_transformer, categorical_features)
         ])
 
-def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features, categorical_features, logger):
+def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features, categorical_features):
     try:
         # Cria um novo preprocessor para cada fold
-        preprocessor = create_preprocessor(numeric_features, categorical_features, logger)
+        preprocessor = create_preprocessor(numeric_features, categorical_features)
         X_train_processed = preprocessor.fit_transform(X_train)
         X_val_processed = preprocessor.transform(X_val)
         
@@ -66,67 +67,38 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features,
         # Treina o modelo
         perceptron.fit(X_train_processed, y_train, epochs=params['epochs'], batch_size=params['batch_size'])
         
-        # Calculate metrics for training set
-        y_train_pred = perceptron.predict_proba(X_train_processed)
-        train_log_loss = log_loss(y_train, y_train_pred)
-        train_accuracy = perceptron.evaluate(X_train_processed, y_train)
-
-        # Calculate metrics for validation set
+        # Faz a previsão
         y_val_pred = perceptron.predict_proba(X_val_processed)
         val_log_loss = log_loss(y_val, y_val_pred)
-        val_accuracy = perceptron.evaluate(X_val_processed, y_val)
-
-        logger.info(f"Train Log Loss: {train_log_loss:.4f}, Train Accuracy: {train_accuracy:.4f}")
-        logger.info(f"Validation Log Loss: {val_log_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}")
-
-        # Função evaluate para calcular acurácia diretamente
-        # val_accuracy = perceptron.evaluate(X_val_processed, y_val)
-        # Função predict_proba para calcular o log logss
-        # y_val_pred = perceptron.predict_proba(X_val_processed)
-        # val_log_loss = log_loss(y_val, y_val_pred)
-        # val_accuracy = accuracy_score(y_val, (y_val_pred >= 0.5).astype(int))
+        val_accuracy = accuracy_score(y_val, (y_val_pred >= 0.5).astype(int))
     
     except Exception as e:
         logger.error(f"Error during training and evaluation: {e}")
         # Retorne uma perda muito alta e acurácia baixa para penalizar o erro
-        train_log_loss, train_accuracy, val_log_loss, val_accuracy = float('inf'), 0.0, float('inf'), 0.0
-        # val_log_loss = float('inf')
-        # val_accuracy = 0.0
+        val_log_loss = float('inf')
+        val_accuracy = 0.0
     
-    return train_log_loss, train_accuracy, val_log_loss, val_accuracy
+    return val_log_loss, val_accuracy
 
-def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5, logger=None):
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.INFO)
-
+def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5):
     logger.info(f"Starting random search with {n_iter} iterations and {n_splits}-fold cross-validation")
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     def evaluate_params(params):
-        fold_scores = []
-        for fold, (train_index, val_index) in enumerate(kf.split(X), 1):
+        scores = []
+        for train_index, val_index in kf.split(X):
             X_train_fold, X_val_fold = X.iloc[train_index], X.iloc[val_index]
             y_train_fold, y_val_fold = y.iloc[train_index], y.iloc[val_index]
             
-            train_log_loss, train_accuracy, val_log_loss, val_accuracy = train_and_evaluate(
-                X_train_fold, y_train_fold, X_val_fold, y_val_fold, params, numeric_features, categorical_features, logger)
+            val_log_loss, val_accuracy = train_and_evaluate(
+                X_train_fold, y_train_fold, X_val_fold, y_val_fold, params, numeric_features, categorical_features
+            )
             
-            fold_scores.append((fold, train_log_loss, train_accuracy, val_log_loss, val_accuracy))
-            logger.info(f"Fold {fold}:")
-            logger.info(f"  Train: Log Loss = {train_log_loss:.4f}, Accuracy = {train_accuracy:.4f}")
-            logger.info(f"  Validation: Log Loss = {val_log_loss:.4f}, Accuracy = {val_accuracy:.4f}")
+            scores.append((val_log_loss, val_accuracy))
         
-        mean_train_log_loss = np.mean([s[1] for s in fold_scores])
-        mean_train_accuracy = np.mean([s[2] for s in fold_scores])
-        mean_val_log_loss = np.mean([s[3] for s in fold_scores])
-        mean_val_accuracy = np.mean([s[4] for s in fold_scores])
-        
-        logger.info("Mean scores across all folds:")
-        logger.info(f"  Train: Log Loss = {mean_train_log_loss:.4f}, Accuracy = {mean_train_accuracy:.4f}")
-        logger.info(f"  Validation: Log Loss = {mean_val_log_loss:.4f}, Accuracy = {mean_val_accuracy:.4f}")
-        
-        return params, fold_scores, mean_train_log_loss, mean_train_accuracy, mean_val_log_loss, mean_val_accuracy
+        mean_log_loss = np.mean([s[0] for s in scores])
+        mean_accuracy = np.mean([s[1] for s in scores])
+        return params, mean_log_loss, mean_accuracy
     
     random_params = []
     for _ in range(n_iter):
@@ -134,26 +106,21 @@ def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5, logger=Non
         random_params.append(params)
     
     results = [r for r in Parallel(n_jobs=-1)(delayed(evaluate_params)(params) for params in random_params) if r is not None]
-
+    
     if results:
-        best_result = min(results, key=lambda x: x[4])  # x[4] is mean_val_log_loss
-        best_params, best_fold_scores, best_mean_train_log_loss, best_mean_train_accuracy, best_mean_val_log_loss, best_mean_val_accuracy = best_result
+        best_params = min(results, key=lambda x: x[1])[0]
         logger.info(f"Random search completed. Best parameters: {best_params}")
-        logger.info("Best mean scores:")
-        logger.info(f"  Train: Log Loss = {best_mean_train_log_loss:.4f}, Accuracy = {best_mean_train_accuracy:.4f}")
-        logger.info(f"  Validation: Log Loss = {best_mean_val_log_loss:.4f}, Accuracy = {best_mean_val_accuracy:.4f}")
         return best_params, results
     else:
         logger.error("No valid results were found during random search.")
         return None, []
 
 def main(data_fraction):
-    logger = configure_logging()
     logger.info("Starting the training process")
     
     # Load data
     logger.info("Loading data")
-    df = pd.read_csv("data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+    df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     
     X = df.drop('Churn', axis=1)
@@ -178,7 +145,7 @@ def main(data_fraction):
     }
         
     # random search
-    best_params, all_results = random_search_cv(X_train, y_train, param_distributions, n_iter=5)
+    best_params, all_results = random_search_cv(X_train, y_train, param_distributions, n_iter=3)
 
     # Verificar se best_params é válido
     if best_params is None:
@@ -186,20 +153,13 @@ def main(data_fraction):
         exit(1)
     
     logger.info("Random search results:")
-    for params, fold_scores, mean_train_log_loss, mean_train_accuracy, mean_val_log_loss, mean_val_accuracy in sorted(all_results, key=lambda x: x[4])[:5]:
+    for params, log_loss_value, accuracy in sorted(all_results, key=lambda x: x[1])[:5]:
         logger.info(f"Params: {params}")
-        logger.info(f"Mean Train: Log Loss = {mean_train_log_loss:.4f}, Accuracy = {mean_train_accuracy:.4f}")
-        logger.info(f"Mean Validation: Log Loss = {mean_val_log_loss:.4f}, Accuracy = {mean_val_accuracy:.4f}")
-        logger.info("Fold Results:")
-        for fold, train_log_loss, train_accuracy, val_log_loss, val_accuracy in fold_scores:
-            logger.info(f"  Fold {fold}:")
-            logger.info(f"    Train: Log Loss = {train_log_loss:.4f}, Accuracy = {train_accuracy:.4f}")
-            logger.info(f"    Validation: Log Loss = {val_log_loss:.4f}, Accuracy = {val_accuracy:.4f}")
-        logger.info("")
+        logger.info(f"Log Loss: {log_loss_value:.4f}, Accuracy: {accuracy:.4f}\n")
     
     # Train final model with best parameters
     logger.info("Training final model with best parameters")
-    final_preprocessor = create_preprocessor(numeric_features, categorical_features, logger)
+    final_preprocessor = create_preprocessor(numeric_features, categorical_features)
     X_train_processed = final_preprocessor.fit_transform(X_train)
     X_test_processed = final_preprocessor.transform(X_test)
     
@@ -217,8 +177,7 @@ def main(data_fraction):
     logger.info("Evaluating final model on test set")
     y_test_pred = final_model.predict_proba(X_test_processed)
     test_log_loss = log_loss(y_test, y_test_pred)
-    # test_accuracy = accuracy_score(y_test, (y_test_pred >= 0.5).astype(int))
-    test_accuracy = final_model.evaluate(X_test_processed, y_test)
+    test_accuracy = accuracy_score(y_test, (y_test_pred >= 0.5).astype(int))
     
     logger.info(f"Final results for {data_fraction*100}% of the data:")
     logger.info(f"  Test Log Loss: {test_log_loss:.4f}")

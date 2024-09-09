@@ -1,11 +1,13 @@
+# train_perceptron.py
 import pandas as pd
 import numpy as np
 from perceptron_multilayer import PerceptronMultilayer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler, OneHotEncoder # type: ignore 
+from sklearn.compose import ColumnTransformer # type: ignore
+from sklearn.pipeline import Pipeline # type: ignore
+from sklearn.impute import SimpleImputer # type: ignore
+from sklearn.model_selection import train_test_split, KFold # type: ignore
+
 
 df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
 
@@ -20,7 +22,7 @@ y = df['Churn'].map({'Yes': 1, 'No': 0})
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Definir colunas numéricas e categóricas
-numeric_features = ['tenure', 'MonthlyCharges', 'TotalCharges']
+numeric_features = ['tenure', 'MonthlyCharges', 'TotalPCharges']
 categorical_features = ['gender', 'SeniorCitizen', 'Partner', 'Dependents', 'PhoneService', 
                         'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
                         'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies', 
