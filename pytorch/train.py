@@ -1,7 +1,7 @@
 # train.py
 import pandas as pd
 import numpy as np
-from pytorch.perceptron_multilayer_gpu import PerceptronMultilayer  # type: ignore
+from pytorch.perceptron_multilayer_gpu import PerceptronMultilayer as PerceptronMultilayer  # type: ignore
 from sklearn.preprocessing import StandardScaler, OneHotEncoder  # type: ignore
 from sklearn.compose import ColumnTransformer  # type: ignore
 from sklearn.pipeline import Pipeline  # type: ignore
@@ -12,7 +12,6 @@ from joblib import Parallel, delayed  # type: ignore
 import logging
 import argparse
 from scipy.stats import uniform, randint  # type: ignore
-import random
 
 # Definir semente global
 RANDOM_SEED = 42

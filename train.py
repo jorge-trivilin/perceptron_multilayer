@@ -1,7 +1,7 @@
 # train.py
 import pandas as pd
 import numpy as np
-from perceptron_multilayer_random_search import PerceptronMultilayer  # type: ignore
+from perceptron_multilayer_random_search import PerceptronMultilayer as PerceptronMultilayer # type: ignore
 from sklearn.preprocessing import StandardScaler, OneHotEncoder  # type: ignore
 from sklearn.compose import ColumnTransformer  # type: ignore
 from sklearn.pipeline import Pipeline  # type: ignore
