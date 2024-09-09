@@ -67,21 +67,34 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features,
         # Treina o modelo
         perceptron.fit(X_train_processed, y_train, epochs=params['epochs'], batch_size=params['batch_size'])
         
-        # Função evaluate para calcular acurácia diretamente
-        val_accuracy = perceptron.evaluate(X_val_processed, y_val)
+        # Calculate metrics for training set
+        y_train_pred = perceptron.predict_proba(X_train_processed)
+        train_log_loss = log_loss(y_train, y_train_pred)
+        train_accuracy = perceptron.evaluate(X_train_processed, y_train)
 
-        # Função predict_proba para calcular o log logss
+        # Calculate metrics for validation set
         y_val_pred = perceptron.predict_proba(X_val_processed)
         val_log_loss = log_loss(y_val, y_val_pred)
+        val_accuracy = perceptron.evaluate(X_val_processed, y_val)
+
+        logger.info(f"Train Log Loss: {train_log_loss:.4f}, Train Accuracy: {train_accuracy:.4f}")
+        logger.info(f"Validation Log Loss: {val_log_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}")
+
+        # Função evaluate para calcular acurácia diretamente
+        # val_accuracy = perceptron.evaluate(X_val_processed, y_val)
+        # Função predict_proba para calcular o log logss
+        # y_val_pred = perceptron.predict_proba(X_val_processed)
+        # val_log_loss = log_loss(y_val, y_val_pred)
         # val_accuracy = accuracy_score(y_val, (y_val_pred >= 0.5).astype(int))
     
     except Exception as e:
         logger.error(f"Error during training and evaluation: {e}")
         # Retorne uma perda muito alta e acurácia baixa para penalizar o erro
-        val_log_loss = float('inf')
-        val_accuracy = 0.0
+        train_log_loss, train_accuracy, val_log_loss, val_accuracy = float('inf'), 0.0, float('inf'), 0.0
+        # val_log_loss = float('inf')
+        # val_accuracy = 0.0
     
-    return val_log_loss, val_accuracy
+    return train_log_loss, train_accuracy, val_log_loss, val_accuracy
 
 def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5, logger=None):
     if logger is None:
@@ -92,19 +105,29 @@ def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5, logger=Non
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
     
     def evaluate_params(params):
-        scores = []
-        for train_index, val_index in kf.split(X):
+        fold_scores = []
+        for fold, (train_index, val_index) in enumerate(kf.split(X), 1):
             X_train_fold, X_val_fold = X.iloc[train_index], X.iloc[val_index]
             y_train_fold, y_val_fold = y.iloc[train_index], y.iloc[val_index]
             
-            val_log_loss, val_accuracy = train_and_evaluate(
+            train_log_loss, train_accuracy, val_log_loss, val_accuracy = train_and_evaluate(
                 X_train_fold, y_train_fold, X_val_fold, y_val_fold, params, numeric_features, categorical_features, logger)
             
-            scores.append((val_log_loss, val_accuracy))
+            fold_scores.append((fold, train_log_loss, train_accuracy, val_log_loss, val_accuracy))
+            logger.info(f"Fold {fold}:")
+            logger.info(f"  Train: Log Loss = {train_log_loss:.4f}, Accuracy = {train_accuracy:.4f}")
+            logger.info(f"  Validation: Log Loss = {val_log_loss:.4f}, Accuracy = {val_accuracy:.4f}")
         
-        mean_log_loss = np.mean([s[0] for s in scores])
-        mean_accuracy = np.mean([s[1] for s in scores])
-        return params, mean_log_loss, mean_accuracy
+        mean_train_log_loss = np.mean([s[1] for s in fold_scores])
+        mean_train_accuracy = np.mean([s[2] for s in fold_scores])
+        mean_val_log_loss = np.mean([s[3] for s in fold_scores])
+        mean_val_accuracy = np.mean([s[4] for s in fold_scores])
+        
+        logger.info("Mean scores across all folds:")
+        logger.info(f"  Train: Log Loss = {mean_train_log_loss:.4f}, Accuracy = {mean_train_accuracy:.4f}")
+        logger.info(f"  Validation: Log Loss = {mean_val_log_loss:.4f}, Accuracy = {mean_val_accuracy:.4f}")
+        
+        return params, fold_scores, mean_train_log_loss, mean_train_accuracy, mean_val_log_loss, mean_val_accuracy
     
     random_params = []
     for _ in range(n_iter):
@@ -112,11 +135,14 @@ def random_search_cv(X, y, param_distributions, n_iter=2, n_splits=5, logger=Non
         random_params.append(params)
     
     results = [r for r in Parallel(n_jobs=-1)(delayed(evaluate_params)(params) for params in random_params) if r is not None]
-    # results = [evaluate_params(params) for params in random_params]
 
     if results:
-        best_params = min(results, key=lambda x: x[1])[0]
+        best_result = min(results, key=lambda x: x[4])  # x[4] is mean_val_log_loss
+        best_params, best_fold_scores, best_mean_train_log_loss, best_mean_train_accuracy, best_mean_val_log_loss, best_mean_val_accuracy = best_result
         logger.info(f"Random search completed. Best parameters: {best_params}")
+        logger.info("Best mean scores:")
+        logger.info(f"  Train: Log Loss = {best_mean_train_log_loss:.4f}, Accuracy = {best_mean_train_accuracy:.4f}")
+        logger.info(f"  Validation: Log Loss = {best_mean_val_log_loss:.4f}, Accuracy = {best_mean_val_accuracy:.4f}")
         return best_params, results
     else:
         logger.error("No valid results were found during random search.")
@@ -161,9 +187,16 @@ def main(data_fraction):
         exit(1)
     
     logger.info("Random search results:")
-    for params, log_loss_value, accuracy in sorted(all_results, key=lambda x: x[1])[:5]:
+    for params, fold_scores, mean_train_log_loss, mean_train_accuracy, mean_val_log_loss, mean_val_accuracy in sorted(all_results, key=lambda x: x[4])[:5]:
         logger.info(f"Params: {params}")
-        logger.info(f"Log Loss: {log_loss_value:.4f}, Accuracy: {accuracy:.4f}\n")
+        logger.info(f"Mean Train: Log Loss = {mean_train_log_loss:.4f}, Accuracy = {mean_train_accuracy:.4f}")
+        logger.info(f"Mean Validation: Log Loss = {mean_val_log_loss:.4f}, Accuracy = {mean_val_accuracy:.4f}")
+        logger.info("Fold Results:")
+        for fold, train_log_loss, train_accuracy, val_log_loss, val_accuracy in fold_scores:
+            logger.info(f"  Fold {fold}:")
+            logger.info(f"    Train: Log Loss = {train_log_loss:.4f}, Accuracy = {train_accuracy:.4f}")
+            logger.info(f"    Validation: Log Loss = {val_log_loss:.4f}, Accuracy = {val_accuracy:.4f}")
+        logger.info("")
     
     # Train final model with best parameters
     logger.info("Training final model with best parameters")
