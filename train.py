@@ -1,4 +1,3 @@
-# train.py
 import pandas as pd
 import numpy as np
 from perceptron_multilayer import PerceptronMultilayer
@@ -10,6 +9,7 @@ from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import log_loss, accuracy_score
 from joblib import Parallel, delayed
 import logging
+import argparse
 
 def configure_logging():
     logging.basicConfig(level=logging.INFO,
@@ -19,9 +19,7 @@ def configure_logging():
 
 logger = configure_logging()
 
-# Função para criar o pré-processador
-def create_preprocessor(numeric_features,
-                        categorical_features):
+def create_preprocessor(numeric_features, categorical_features):
     logger.info("Creating preprocessor")
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='median')),
@@ -33,131 +31,168 @@ def create_preprocessor(numeric_features,
         ('onehot', OneHotEncoder(sparse_output=False))
     ])
 
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('cat', categorical_transformer, categorical_features)
         ])
-    
-    return preprocessor
 
-# Função para treinar o perceptron
-def train_perceptron(X_train_fold, y_train_fold, X_val_fold, y_val_fold, fold, numeric_features, categorical_features):
-    fold_logger = logging.getLogger(f"{__name__}.fold{fold}")
-    fold_logger.info(f"Training perceptron for fold {fold}")
+def train_and_evaluate(X_train, y_train, X_val, y_val, params, numeric_features, categorical_features):
+    try:
+        # Cria um novo preprocessor para cada fold
+        preprocessor = create_preprocessor(numeric_features, categorical_features)
+        X_train_processed = preprocessor.fit_transform(X_train)
+        X_val_processed = preprocessor.transform(X_val)
+        
+        # Converta y para Numpy array, se não for
+        y_train = y_train.to_numpy() if isinstance(y_train, pd.Series) else y_train
+        y_val = y_val.to_numpy() if isinstance(y_val, pd.Series) else y_val
+        
+        input_size = X_train_processed.shape[1]
+        perceptron = PerceptronMultilayer(
+            input_size=input_size,
+            hidden_size=params['hidden_size'],
+            output_size=1,
+            learning_rate=params['learning_rate'],
+            logger=logger
+        )
+        
+        # Treina o modelo
+        perceptron.fit(X_train_processed, y_train, epochs=params['epochs'], batch_size=params['batch_size'])
+        
+        # Faz a previsão
+        y_val_pred = perceptron.predict_proba(X_val_processed)
+        val_log_loss = log_loss(y_val, y_val_pred)
+        val_accuracy = accuracy_score(y_val, (y_val_pred >= 0.5).astype(int))
     
-    # Criar e ajustar o preprocessor apenas para este fold
-    preprocessor = create_preprocessor(numeric_features, categorical_features)
-    X_train_processed = preprocessor.fit_transform(X_train_fold)
-    X_val_processed = preprocessor.transform(X_val_fold)
+    except Exception as e:
+        logger.error(f"Error during training and evaluation: {e}")
+        # Retorne uma perda muito alta e acurácia baixa para penalizar o erro
+        val_log_loss = float('inf')
+        val_accuracy = 0.0
     
-    input_size = X_train_processed.shape[1]
-    hidden_size = 4
-    output_size = 1
-    
-    perceptron = PerceptronMultilayer(input_size=input_size,
-                                      hidden_size=hidden_size,
-                                      output_size=output_size,
-                                      logger=fold_logger)
-    
-    perceptron.fit(X_train_processed, y_train_fold, epochs=1000)
-    
-    # Previsões e cálculos de métricas
-    y_train_pred = perceptron.predict_proba(X_train_processed)
-    y_val_pred = perceptron.predict_proba(X_val_processed)
-    
-    train_log_loss = log_loss(y_train_fold, y_train_pred)
-    val_log_loss = log_loss(y_val_fold, y_val_pred)
-    val_accuracy = accuracy_score(y_val_fold, y_val_pred.round())
-    
-    fold_logger.info(f"Fold {fold} results:")
-    fold_logger.info(f"  Training Log Loss: {train_log_loss:.4f}")
-    fold_logger.info(f"  Validation Log Loss: {val_log_loss:.4f}")
-    fold_logger.info(f"  Validation Accuracy: {val_accuracy:.4f}")
-    
-    return train_log_loss, val_log_loss, val_accuracy
+    return val_log_loss, val_accuracy
 
-# Função para realizar cross-validation
-def cross_validate_perceptron(X_train, y_train, n_splits=5):
-    logger.info(f"Starting cross-validation with {n_splits} splits")
+def grid_search_cv(X, y, param_grid, numeric_features, categorical_features, n_splits=5):
+    logger.info(f"Starting grid search with {n_splits}-fold cross-validation")
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-
-    # Executar cross-validation em paralelo
-    results = Parallel(n_jobs=-1, verbose=10)(
-        delayed(train_perceptron)(
-            X_train.iloc[train_index], y_train.iloc[train_index],
-            X_train.iloc[val_index], y_train.iloc[val_index],
-            fold, numeric_features, categorical_features
-        ) for fold, (train_index, val_index) in enumerate(kf.split(X_train), 1)
-    )
     
-    # Processar resultados
-    train_log_losses, val_log_losses, val_accuracies = zip(*results)
+    def evaluate_params(params):
+        scores = []
+        for train_index, val_index in kf.split(X):
+            X_train_fold, X_val_fold = X.iloc[train_index], X.iloc[val_index]
+            y_train_fold, y_val_fold = y.iloc[train_index], y.iloc[val_index]
+            
+            # Chama a função de treinamento e avaliação
+            val_log_loss, val_accuracy = train_and_evaluate(
+                X_train_fold, y_train_fold, X_val_fold, y_val_fold, params, numeric_features, categorical_features
+            )
+            
+            # Adiciona os resultados à lista de scores
+            scores.append((val_log_loss, val_accuracy))
+        
+        # Calcula a média dos resultados
+        mean_log_loss = np.mean([s[0] for s in scores])
+        mean_accuracy = np.mean([s[1] for s in scores])
+        return params, mean_log_loss, mean_accuracy
     
-    mean_train_log_loss = np.mean(train_log_losses)
-    mean_val_log_loss = np.mean(val_log_losses)
-    mean_val_accuracy = np.mean(val_accuracies)
-
-    logger.info("Cross-validation completed")
-    logger.info(f"Mean cross-validation Training Log Loss: {mean_train_log_loss:.4f}")
-    logger.info(f"Mean cross-validation Validation Log Loss: {mean_val_log_loss:.4f}")
-    logger.info(f"Mean cross-validation accuracy: {mean_val_accuracy:.4f}")
+    # Executa o grid search de forma paralela e filtra os resultados não válidos
+    results = [r for r in Parallel(n_jobs=-1)(delayed(evaluate_params)(params) for params in param_grid) if r is not None]
     
-    return mean_train_log_loss, mean_val_log_loss, mean_val_accuracy
+    if results:
+        # Acessa os melhores parâmetros
+        best_params = min(results, key=lambda x: x[1])[0]
+        logger.info(f"Grid search completed. Best parameters: {best_params}")
+        return best_params, results
+    else:
+        logger.error("No valid results were found during grid search.")
+        return None, []
 
-def main():
+def main(data_fraction):
     logger.info("Starting the training process")
     
-    # Carregar e preparar os dados
-    logger.info("Loading and preparing data")
+    # Load data
+    logger.info("Loading data")
     df = pd.read_csv("/media/kz/HDD/Development/perceptron_multilayer/data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
-    # df = data.sample(frac=0.1)
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     
     X = df.drop('Churn', axis=1)
     y = df['Churn'].map({'Yes': 1, 'No': 0})
     
+    # Sample the data if fraction is less than 1
+    if data_fraction < 1.0:
+        logger.info(f"Sampling {data_fraction*100}% of the data")
+        X = X.sample(frac=data_fraction, random_state=42)
+        y = y[X.index]
+    else:
+        logger.info("Using 100% of the data")
+    
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     logger.info(f"Data split: Training set size: {len(X_train)}, Test set size: {len(X_test)}")
     
-    # Cross-validation
-    logger.info("Starting cross-validation")
-    mean_train_log_loss, mean_val_log_loss, mean_val_accuracy = cross_validate_perceptron(X_train, y_train)
+    # Defining parameter grid with 3 (hidden_size) * 3 (learning_rate) * 2 (epochs) * 2 (batch_size) = 36 iterations.
+    param_grid = [
+        {
+            'hidden_size': hidden_size,
+            'learning_rate': lr,
+            'epochs': epochs,
+            'batch_size': batch_size
+        }
+        for hidden_size in [4, 8, 16]
+        for lr in [0.001, 0.01, 0.1]
+        for epochs in [500, 1000]
+        for batch_size in [32, 64]
+    ] # 36 iterations * 5 folds = 180 training and evaluation during grid search process.
     
-    # Treinar o modelo final
-    logger.info("Training final model on complete training set")
-    preprocessor = create_preprocessor(numeric_features, categorical_features)
-    X_train_processed = preprocessor.fit_transform(X_train)
-    X_test_processed = preprocessor.transform(X_test)
+    # Grid search
+    best_params, all_results = grid_search_cv(X_train, y_train, param_grid, numeric_features, categorical_features)
+
+    # Verificar se best_params é válido
+    if best_params is None:
+        logger.error("Grid search did not return valid best parameters. Exiting.")
+        exit(1)  # Ou levante uma exceção, dependendo da sua estratégia de erro
     
-    input_size = X_train_processed.shape[1]
-    hidden_size = 4
-    output_size = 1
+    logger.info("Grid search results:")
+    for params, log_loss, accuracy in sorted(all_results, key=lambda x: x[1])[:5]:
+        logger.info(f"Params: {params}")
+        logger.info(f"Log Loss: {log_loss:.4f}, Accuracy: {accuracy:.4f}\n")
     
-    perceptron = PerceptronMultilayer(input_size=input_size,
-                                      hidden_size=hidden_size,
-                                      output_size=output_size,
-                                      logger=logger)
+    # Train final model with best parameters
+    logger.info("Training final model with best parameters")
+    final_preprocessor = create_preprocessor(numeric_features, categorical_features)
+    X_train_processed = final_preprocessor.fit_transform(X_train)
+    X_test_processed = final_preprocessor.transform(X_test)
     
-    perceptron.fit(X_train_processed, y_train, epochs=1000)
+    final_model = PerceptronMultilayer(
+        input_size=X_train_processed.shape[1],
+        hidden_size=best_params['hidden_size'],
+        output_size=1,
+        learning_rate=best_params['learning_rate'],
+        logger=logger
+    )
+    final_model.fit(X_train_processed, y_train, epochs=best_params['epochs'], batch_size=best_params['batch_size'])
     
-    # Avaliação final
+    # Final evaluation
     logger.info("Evaluating final model on test set")
-    y_test_pred = perceptron.predict_proba(X_test_processed)
+    y_test_pred = final_model.predict_proba(X_test_processed)
     test_log_loss = log_loss(y_test, y_test_pred)
-    test_accuracy = accuracy_score(y_test, y_test_pred.round())
+    test_accuracy = accuracy_score(y_test, (y_test_pred >= 0.5).astype(int))
     
-    logger.info("Final results:")
+    logger.info(f"Final results for {data_fraction*100}% of the data:")
     logger.info(f"  Test Log Loss: {test_log_loss:.4f}")
     logger.info(f"  Test Accuracy: {test_accuracy:.4f}")
     
     logger.info("Training process completed")
 
 if __name__ == "__main__":
-    # Definir colunas numéricas e categóricas
+    parser = argparse.ArgumentParser(description="Train Perceptron with specified data fraction")
+    parser.add_argument("--fraction", type=float, default=1.0, help="Fraction of data to use (0.0 to 1.0)")
+    args = parser.parse_args()
+
     numeric_features = ['tenure', 'MonthlyCharges', 'TotalCharges']
     categorical_features = ['gender', 'SeniorCitizen', 'Partner', 'Dependents', 'PhoneService', 
                             'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
                             'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies', 
                             'Contract', 'PaperlessBilling', 'PaymentMethod']
-    main()
+    
+    main(args.fraction)
