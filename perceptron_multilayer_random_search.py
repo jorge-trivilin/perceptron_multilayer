@@ -2,6 +2,7 @@
 import numpy as np
 import logging
 import pandas as pd
+import time
 
 def configure_logging():
     """Configures the logger for the module, if necessary."""
@@ -64,7 +65,6 @@ class PerceptronMultilayer:
         Trains the model using forward propagation and backpropagation.
         """
         self.logger.info(f"Starting training for {epochs} epochs with batch size {batch_size}")
-        # Adjusting the fit method to work with the new batch structure:
         n_samples = X.shape[0]
 
         if isinstance(y, pd.Series):
@@ -72,7 +72,7 @@ class PerceptronMultilayer:
         
         for epoch in range(epochs):
             total_loss = 0
-            # Shuffle the data
+            total_operations = 0
             indices = np.random.permutation(n_samples)
             X_shuffled = X[indices]
             y_shuffled = y[indices]
@@ -82,23 +82,44 @@ class PerceptronMultilayer:
                 y_batch = y_shuffled[i:i+batch_size]
 
                 # Forward propagation in batch
+                start_time = time.monotonic()
                 y_hidden, y_output = self.feedfoward(X_batch)
+                end_time = time.monotonic()
+                forward_time = end_time - start_time
 
                 # Calculate the error
                 error = y_batch.reshape(-1, 1) - y_output
                 batch_loss = np.mean(self.binary_cross_entropy(y_batch, y_output))
 
                 # Backpropagation for the whole batch
+                start_time = time.monotonic()
                 self.backpropagation(error, X_batch, y_hidden, y_output)
+                end_time = time.monotonic()
+                backward_time = end_time - start_time
+
+                # Calculate GFLOPS
+                #batch_operations = (2 * self.input_size * self.hidden_size + 
+                                    #2 * self.hidden_size * self.output_size) * batch_size
+                #total_operations += batch_operations
+
+                # print(f"Forward Propagation Time: {forward_time:.4f} seconds")
+                # print(f"Backward Propagation Time: {backward_time:.4f} seconds")
+                # print(f"Operations per batch: {batch_operations}")
+
+                #Display TFLOPS
+                #total_time = forward_time + backward_time
+                #if total_time > 0:
+                    #tflops = (total_operations / (total_time)) * 1e-12
+                    #print(f"TFLOPS: {tflops:.4f}")
 
                 total_loss += batch_loss
             
-            # Display loss every 100 epochs
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}, Average Loss: {total_loss / n_samples}")
         self.logger.info("Training completed")
 
     def feedfoward(self, inputs):
+        start_time = time.monotonic()
         # In feedforward, instead of multiplying a single input, we multiply the matrix of inputs.
         # Each row of the input matrix represents a sample from the batch.
         # Here, inputs will be a batch of samples with shape (batch_size, input_size). 
@@ -108,10 +129,14 @@ class PerceptronMultilayer:
         
         v_output = np.dot(y_hidden, self.weights_hidden_output.T) + self.bias_output
         y_output = self.sigmoid(v_output)
+        end_time = time.monotonic()
+        feedfoward_time = end_time - start_time
+        # print(f"Feedforward Time: {feedfoward_time:.4f} seconds")
 
         return y_hidden, y_output
 
     def backpropagation(self, error, inputs, y_hidden, y_output):
+        start_time = time.monotonic()
         # In backpropagation, we calculate the error and update weights for all samples in a batch at once
         # inputs (batch_size, input_size), error (batch_size, output_size)
         # inputs is the batch matrix with shape (batch_size, input_size).
@@ -136,6 +161,10 @@ class PerceptronMultilayer:
         # Update biases
         self.bias_output += self.learning_rate * np.mean(delta_output, axis=0)
         self.bias_hidden += self.learning_rate * np.mean(delta_hidden, axis=0)
+        
+        end_time = time.monotonic()
+        backpropagation_time = end_time - start_time
+        # print(f"Backpropagation Time: {backpropagation_time:.4f} seconds")
 
     def predict_proba(self, X):
         """
